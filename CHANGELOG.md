@@ -5,6 +5,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Unreleased
+
+## [3.0.0] - YYYY-MM-DD
+### Changed
+- **[BREAKING CHANGE]**: shrunk `Stmt`, `Expression`, and other AST nodes by boxing heavy enum variants and struct fields, fixing recursive-parse stack overflows on small-stack threads (#346). `Stmt` is now ~14x smaller (4784 → 352 bytes); `Expression` is ~3x smaller (880 → 280 bytes). The `#346` repro now parses comfortably in a 96 KiB release-mode stack (was ~384 KiB).
+  - Code that destructures variants by value will need `Box::new(...)` at construction sites and `*`/auto-deref at binding sites. Code that uses accessor methods or matches by reference is unaffected, since `Box<T>: Deref<Target = T>`.
+  - `serde` representation is unchanged; `Box<T>` serializes transparently and all existing snapshot files are byte-identical.
+  - Affected `Stmt` variants: `Do`, `If`, `While`, `Repeat`, `NumericFor`, `GenericFor`, `FunctionDeclaration`, `LocalFunction`, `CompoundAssignment`, plus the Luau-only `ConstFunction`, `TypeDeclaration`, `TypeFunction`, `ExportedTypeDeclaration`, `ExportedTypeFunction`.
+  - Affected `Expression` variants: `IfExpression`, `InterpolatedString`, `TableConstructor`, `TypeAssertion`.
+  - Affected `Suffix`/`Call` variants: `Suffix::TypeInstantiation`, `Call::MethodCall`.
+  - Affected struct fields: `body` on every function-bearing struct (`AnonymousFunction`, `LocalFunction`, `FunctionDeclaration`, `ConstFunction`, `TypeFunction`); `condition`/`until`/`start`/`end`/`step` on loop and branch structs; `expression` on `Index::Brackets`; `key`/`value` on `Field::ExpressionKey` and `value` on `Field::NameKey`; `TableConstructor` on `FunctionArgs::TableConstructor`; `type_instantiation` on `MethodCall`; `return_type`/`generics` on `FunctionBody`; `type_specifier` on `NumericFor`; the `TypeInfo`-bearing fields on `TypeField`, `TypeFieldKey::IndexSignature`, `TypeArgument`, `TypeSpecifier`, `TypeAssertion`, and `GenericDeclarationParameter`.
+
 ### Fixed
 - When a runtime `LuaVersion` has both Luau and Lua 5.3+ enabled, the lexer no longer combines `<<` and `>>` into single tokens. This lets blended-dialect callers parse Luau's explicit type-instantiation syntax (`f<<T>>(x)`) and nested generic types (`Map<K, Vec<V>>`) correctly. Bitwise shifts and compound shift-assigns (`<<=`, `>>=`) become unavailable under that exact feature combination as a trade-off; pure Lua 5.3/5.4 and pure Luau parsing are unaffected.
 
